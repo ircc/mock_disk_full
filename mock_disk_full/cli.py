@@ -113,10 +113,11 @@ def run_fill(partitions: List[DiskPartition], reserve_mb: int = RESERVE_MB_DEFAU
     """执行填充流程：选分区 -> 确认 -> 创建填充文件。"""
     print_disk_list(partitions)
     idx = prompt_choice(
-        "请选择要填充的分区（输入序号）: ",
+        "请选择要填充的分区（输入序号，0 退出）: ",
         len(partitions),
+        allow_zero=True,
     )
-    if idx is None:
+    if idx is None or idx == 0:
         log("[取消] 未选择有效分区。")
         return
 
