@@ -88,8 +88,9 @@ def prompt_choice(
     prompt: str,
     max_index: int,
     allow_zero: bool = False,
+    invalid_exit: bool = False,
 ) -> Optional[int]:
-    """提示用户输入选项编号，返回 1-based 索引，无效则返回 None。"""
+    """提示用户输入选项编号，返回 1-based 索引。invalid_exit 为 True 时，非预期输入直接返回 None（退出/取消），不重试。"""
     while True:
         try:
             s = input(prompt).strip()
@@ -100,6 +101,8 @@ def prompt_choice(
                 return n
         except ValueError:
             pass
+        if invalid_exit:
+            return None
         log("  无效输入，请重新选择。")
 
 
@@ -113,11 +116,11 @@ def run_fill(partitions: List[DiskPartition], reserve_mb: int = RESERVE_MB_DEFAU
     """执行填充流程：选分区 -> 确认 -> 创建填充文件。"""
     print_disk_list(partitions)
     idx = prompt_choice(
-        "请选择要填充的分区（输入序号，0 退出）: ",
+        "请选择要填充的分区（输入序号，其它数字退出）: ",
         len(partitions),
-        allow_zero=True,
+        invalid_exit=True,
     )
-    if idx is None or idx == 0:
+    if idx is None:
         log("[取消] 未选择有效分区。")
         return
 
@@ -215,12 +218,9 @@ def main() -> None:
         log("请选择操作：")
         log("  1. 模拟磁盘占满（创建填充文件）")
         log("  2. 释放磁盘空间（删除填充文件）")
-        log("  0. 退出")
         log("")
-        choice = prompt_choice("请输入选项 (0/1/2): ", 2, allow_zero=True)
+        choice = prompt_choice("请输入选项 (1/2，其它数字退出): ", 2, invalid_exit=True)
         if choice is None:
-            continue
-        if choice == 0:
             log("再见。")
             break
         if choice == 1:
