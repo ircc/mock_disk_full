@@ -10,9 +10,13 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
-from .disk_info import DiskPartition, get_disk_partitions, get_partition_by_path
+from .disk_info import (
+    DiskPartition,
+    get_disk_partitions,
+    get_partition_by_path,
+)
 
 
 # 预留空间（MB），避免完全占满导致系统异常
@@ -40,6 +44,23 @@ def get_filler_file_path(mount_point: str) -> str:
         return os.path.join(mount_point + os.sep, FAKE_DIR, FAKE_FILENAME)
     # macOS / Unix: {mount_point}/testfile
     return os.path.join(mount_point, MAC_FILENAME)
+
+
+def list_existing_filler_files() -> List[Tuple[str, int]]:
+    """
+    扫描所有分区，返回本工具创建的填充文件列表（路径, 文件大小字节）。
+    用于释放前展示当前 mock 占用情况。
+    """
+    result: List[Tuple[str, int]] = []
+    for part in get_disk_partitions():
+        path = get_filler_file_path(part.mount_point)
+        if os.path.isfile(path):
+            try:
+                size = os.path.getsize(path)
+                result.append((path, size))
+            except OSError:
+                continue
+    return result
 
 
 def fill_disk(

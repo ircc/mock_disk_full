@@ -21,6 +21,7 @@ from .filler import (
     RESERVE_MB_DEFAULT,
     fill_disk,
     get_filler_file_path,
+    list_existing_filler_files,
     remove_filler_file,
 )
 
@@ -29,6 +30,15 @@ def log(msg: str) -> None:
     """统一中文日志输出。"""
     print(msg)
     sys.stdout.flush()
+
+
+def log_operation_end(operation_name: str = "操作已结束") -> None:
+    """输出操作结束分隔块，便于区分「执行完毕」与后续菜单。"""
+    log("")
+    log("=" * 60)
+    log(f"  【{operation_name}】")
+    log("=" * 60)
+    log("")
 
 
 def print_header() -> None:
@@ -105,43 +115,68 @@ def run_fill(partitions: List[DiskPartition], reserve_mb: int = RESERVE_MB_DEFAU
     log("")
     if not confirm("确认后将在该分区创建大文件以占满磁盘，是否继续？(y/N): "):
         log("[取消] 已取消填充操作。")
+        log_operation_end("填充已取消")
         return
 
     ok, result = fill_disk(part.mount_point, reserve_mb=reserve_mb, log_print=log)
     if ok:
+        log("")
         log("[完成] 磁盘填充已完成。")
+        # 打印填充后的磁盘情况（输出填充效果）
+        partitions_after = get_disk_partitions()
+        part_after = next(
+            (p for p in partitions_after if p.mount_point == part.mount_point),
+            None,
+        )
+        if part_after:
+            log("")
+            log("【填充后磁盘情况】")
+            log("-" * 60)
+            log(f"  {part_after.mount_point}  | "
+                f"总空间: {part_after.total_gb:.2f} GB | "
+                f"已用: {part_after.used_gb:.2f} GB | "
+                f"剩余: {part_after.free_gb:.2f} GB")
+            log("-" * 60)
+        log_operation_end("填充操作已结束")
     else:
         log(f"[失败] {result}")
+        log_operation_end("填充未完成")
 
 
-def run_remove(partitions: List[DiskPartition]) -> None:
-    """执行释放流程：选分区 -> 确认 -> 删除填充文件。"""
-    print_disk_list(partitions)
-    idx = prompt_choice(
-        "请选择要释放的分区（输入序号）: ",
-        len(partitions),
-    )
-    if idx is None:
-        log("[取消] 未选择有效分区。")
+def run_remove() -> None:
+    """执行释放流程：自动检查 mock 占用 -> 列出并提示确认 -> 删除填充文件。"""
+    existing = list_existing_filler_files()
+    if not existing:
+        log("【当前 mock 占用情况】")
+        log("-" * 60)
+        log("  当前未检测到本工具创建的填充文件，无需释放。")
+        log("-" * 60)
+        log_operation_end("释放检查已结束（无待释放文件）")
         return
 
-    part = partitions[idx - 1]
-    filler_path = get_filler_file_path(part.mount_point)
-
+    log("【当前 mock 占用情况】")
+    log("-" * 60)
+    for i, (path, size_bytes) in enumerate(existing, 1):
+        size_gb = size_bytes / (1024**3)
+        log(f"  {i}. {path}")
+        log(f"     占用空间: {size_gb:.2f} GB")
+    log("-" * 60)
     log("")
-    log("【即将执行】")
-    log(f"  分区: {part.mount_point}")
-    log(f"  将删除填充文件: {filler_path}")
-    log("")
-    if not confirm("确认删除该填充文件以释放空间？(y/N): "):
+    if not confirm("确认删除以上填充文件以释放空间？(y/N): "):
         log("[取消] 已取消释放操作。")
+        log_operation_end("释放已取消")
         return
 
-    ok, result = remove_filler_file(filler_path, log_print=log)
-    if ok:
+    all_ok = True
+    for path, _ in existing:
+        ok, result = remove_filler_file(path, log_print=log)
+        if not ok:
+            log(f"[失败] {result}")
+            all_ok = False
+    log("")
+    if all_ok:
         log("[完成] 磁盘空间已释放。")
-    else:
-        log(f"[失败] {result}")
+    log_operation_end("释放操作已结束" if all_ok else "释放未完全成功")
 
 
 def main() -> None:
@@ -168,7 +203,7 @@ def main() -> None:
         if choice == 1:
             run_fill(partitions)
         else:
-            run_remove(partitions)
+            run_remove()
         log("")
 
 
@@ -184,7 +219,7 @@ def main_argv() -> None:
         if sys.argv[1] == "fill":
             run_fill(partitions)
         else:
-            run_remove(partitions)
+            run_remove()
         return
     main()
 
