@@ -1,0 +1,31 @@
+# Python 字节码与缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.Python
+*.so
+
+# 虚拟环境
+.venv/
+venv/
+ENV/
+
+# 构建与分发
+build/
+dist/
+*.egg-info/
+*.egg
+
+# 测试与覆盖率
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# 其他
+.DS_Store
+*.log
+.env
+.env.*

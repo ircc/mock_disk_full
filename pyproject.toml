@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mock-disk-full"
+version = "1.0.0"
+description = "跨平台模拟磁盘占满工具（Windows / macOS）"
+readme = "README.md"
+requires-python = ">=3.7"
+dependencies = [
+    "psutil>=5.9.0",
+]
+
+[project.scripts]
+mock_disk_full = "mock_disk_full.cli:main_argv"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mock_disk_full*"]
