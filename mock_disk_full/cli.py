@@ -13,14 +13,30 @@ if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
     except AttributeError:
         pass
+
+# 直接运行 python mock_disk_full/cli.py 时无包上下文，改为以模块方式执行
+if __name__ == "__main__" and __package__ is None:
+    import os
+    import runpy
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, project_root)
+    runpy.run_module("mock_disk_full", run_name="__main__")
+    sys.exit()
+
 from typing import List, Optional
 
 from . import __version__
-from .disk_info import DiskPartition, get_disk_partitions
+import os
+
+from .disk_info import (
+    DiskPartition,
+    get_disk_partitions,
+    get_partition_by_path,
+)
 from .filler import (
     RESERVE_MB_DEFAULT,
     fill_disk,
-    get_filler_file_path,
+    get_actual_filler_path,
     list_existing_filler_files,
     remove_filler_file,
 )
@@ -53,11 +69,17 @@ def print_header() -> None:
 
 
 def print_disk_list(partitions: List[DiskPartition]) -> None:
-    """打印当前磁盘情况（总空间、剩余空间）。"""
+    """打印当前磁盘情况（总空间、剩余空间）。Mac 上标明 $HOME 所在分区。"""
     log("【当前磁盘情况】")
     log("-" * 60)
+    home_part = None
+    if sys.platform == "darwin":
+        home_part = get_partition_by_path(os.path.expanduser("~"))
     for i, p in enumerate(partitions, 1):
-        log(f"  {i}. {p}")
+        suffix = ""
+        if home_part and p.mount_point == home_part.mount_point:
+            suffix = "[$HOME 所在分区]"
+        log(f"  {i}. {p.__str__(suffix)}")
     log("-" * 60)
     log("")
 
@@ -99,7 +121,7 @@ def run_fill(partitions: List[DiskPartition], reserve_mb: int = RESERVE_MB_DEFAU
         return
 
     part = partitions[idx - 1]
-    filler_path = get_filler_file_path(part.mount_point)
+    filler_path = get_actual_filler_path(part)
     free_gb = part.free_gb
     reserve_gb = reserve_mb / 1024
     fill_gb = free_gb - reserve_gb

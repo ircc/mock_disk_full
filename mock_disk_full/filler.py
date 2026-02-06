@@ -46,20 +46,42 @@ def get_filler_file_path(mount_point: str) -> str:
     return os.path.join(mount_point, MAC_FILENAME)
 
 
+def get_actual_filler_path(part: DiskPartition) -> str:
+    """
+    返回该分区上实际使用的填充文件路径。
+    Mac 上若分区为 $HOME 所在分区，则使用 $HOME/testfile，否则使用挂载点下 testfile。
+    """
+    if _is_macos():
+        home_part = get_partition_by_path(os.path.expanduser("~"))
+        if home_part and home_part.mount_point == part.mount_point:
+            return os.path.join(os.path.expanduser("~"), MAC_FILENAME)
+    return get_filler_file_path(part.mount_point)
+
+
 def list_existing_filler_files() -> List[Tuple[str, int]]:
     """
     扫描所有分区，返回本工具创建的填充文件列表（路径, 文件大小字节）。
     用于释放前展示当前 mock 占用情况。
     """
     result: List[Tuple[str, int]] = []
+    seen_paths: set = set()
     for part in get_disk_partitions():
-        path = get_filler_file_path(part.mount_point)
-        if os.path.isfile(path):
-            try:
-                size = os.path.getsize(path)
-                result.append((path, size))
-            except OSError:
+        paths_to_check = [get_actual_filler_path(part)]
+        # Mac 上 $HOME 分区可能曾写在挂载点下，兼容旧文件
+        if _is_macos():
+            home_part = get_partition_by_path(os.path.expanduser("~"))
+            if home_part and part.mount_point == home_part.mount_point:
+                paths_to_check.append(get_filler_file_path(part.mount_point))
+        for path in paths_to_check:
+            if path in seen_paths:
                 continue
+            if os.path.isfile(path):
+                try:
+                    size = os.path.getsize(path)
+                    result.append((path, size))
+                    seen_paths.add(path)
+                except OSError:
+                    continue
     return result
 
 
@@ -88,7 +110,7 @@ def fill_disk(
         return False, f"剩余空间不足 {reserve_mb} MB，当前约 {free_mb} MB，无需填充。"
 
     fill_mb = free_mb - reserve_mb
-    filler_path = get_filler_file_path(part.mount_point)
+    filler_path = get_actual_filler_path(part)
 
     if _is_windows():
         return _fill_windows(part.mount_point, filler_path, fill_mb, log_print)
